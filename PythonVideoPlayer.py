@@ -34,6 +34,22 @@ class VideoPlayerApp(tk.Tk):
     self.video_frame = tk.Frame(self, bg='black')
     self.video_frame.pack(fill=tk.BOTH, expand=True)
 
+    # Small icon button at top-right to exit fullscreen (hidden in normal mode)
+    self.btn_exit_fs = tk.Button(
+        self,
+        text='✕',
+        font=('Arial', 12, 'bold'),
+        bg='#222222',
+        fg='white',
+        activebackground='#444444',
+        activeforeground='white',
+        bd=0,
+        padx=8,
+        pady=2,
+        cursor='hand2',
+        command=self.exit_fullscreen,
+    )
+
     # Timeline / Seek bar frame
     self.timeline_panel = tk.Frame(self)
     self.timeline_panel.pack(fill=tk.X, padx=10, pady=(5, 0))
@@ -80,7 +96,7 @@ class VideoPlayerApp(tk.Tk):
     )
     self.btn_stop.pack(side=tk.LEFT, padx=5)
 
-    # Dedicated Fullscreen toggle button
+    # Fullscreen button in normal view
     self.btn_fullscreen = tk.Button(
         self.control_panel, text='Fullscreen', command=self.toggle_fullscreen
     )
@@ -102,7 +118,7 @@ class VideoPlayerApp(tk.Tk):
     self.volume_slider.pack(side=tk.LEFT, padx=5)
     self.media_player.audio_set_volume(80)
 
-    # Allow Escape key to exit fullscreen as a safety fallback
+    # Allow Escape key to exit fullscreen as a convenience fallback
     self.bind('<Escape>', self.exit_fullscreen)
 
     # Ensure window is drawn before attaching VLC video output
@@ -127,9 +143,18 @@ class VideoPlayerApp(tk.Tk):
     self.attributes('-fullscreen', self.is_fullscreen)
 
     if self.is_fullscreen:
-      self.btn_fullscreen.config(text='Exit Fullscreen')
+      # Hide bottom timeline and controls
+      self.timeline_panel.pack_forget()
+      self.control_panel.pack_forget()
+      # Show small exit icon at the top-right corner
+      self.btn_exit_fs.place(relx=1.0, x=-15, y=15, anchor='ne')
+      self.btn_exit_fs.lift()
     else:
-      self.btn_fullscreen.config(text='Fullscreen')
+      # Hide top-right exit icon
+      self.btn_exit_fs.place_forget()
+      # Restore bottom timeline and controls
+      self.timeline_panel.pack(fill=tk.X, padx=10, pady=(5, 0))
+      self.control_panel.pack(fill=tk.X, padx=10, pady=10)
 
   def exit_fullscreen(self, event=None):
     if self.is_fullscreen:

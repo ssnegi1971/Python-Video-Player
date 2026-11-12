@@ -22,24 +22,28 @@ class VideoPlayerApp(tk.Tk):
 
     # Disable hardware acceleration (--avcodec-hw=none) to fix Intel UHD D3D11VA buffer errors
     # Add '--quiet' to suppress non-fatal Windows child-window thumbnail warnings
-    self.instance = vlc.Instance('--avcodec-hw=none', '--quiet')
+    # Add '--no-video-title-show' to keep fullscreen clean
+    self.instance = vlc.Instance(
+        '--avcodec-hw=none', '--quiet', '--no-video-title-show'
+    )
     self.media_player = self.instance.media_player_new()
     self.is_dragging = False
+    self.is_fullscreen = False
 
     # Video display panel
     self.video_frame = tk.Frame(self, bg='black')
     self.video_frame.pack(fill=tk.BOTH, expand=True)
 
     # Timeline / Seek bar frame
-    timeline_panel = tk.Frame(self)
-    timeline_panel.pack(fill=tk.X, padx=10, pady=(5, 0))
+    self.timeline_panel = tk.Frame(self)
+    self.timeline_panel.pack(fill=tk.X, padx=10, pady=(5, 0))
 
-    self.time_label = tk.Label(timeline_panel, text='00:00 / 00:00')
+    self.time_label = tk.Label(self.timeline_panel, text='00:00 / 00:00')
     self.time_label.pack(side=tk.RIGHT, padx=5)
 
     self.seek_var = tk.DoubleVar()
     self.seek_slider = ttk.Scale(
-        timeline_panel,
+        self.timeline_panel,
         from_=0,
         to=1000,
         orient=tk.HORIZONTAL,
@@ -53,34 +57,42 @@ class VideoPlayerApp(tk.Tk):
     self.seek_slider.bind('<ButtonRelease-1>', self.on_slider_release)
 
     # Control buttons frame
-    control_panel = tk.Frame(self)
-    control_panel.pack(fill=tk.X, padx=10, pady=10)
+    self.control_panel = tk.Frame(self)
+    self.control_panel.pack(fill=tk.X, padx=10, pady=10)
 
     self.btn_open = tk.Button(
-        control_panel, text='Open File', command=self.open_file
+        self.control_panel, text='Open File', command=self.open_file
     )
     self.btn_open.pack(side=tk.LEFT, padx=5)
 
     self.btn_play = tk.Button(
-        control_panel, text='Play', command=self.play_video
+        self.control_panel, text='Play', command=self.play_video
     )
     self.btn_play.pack(side=tk.LEFT, padx=5)
 
     self.btn_pause = tk.Button(
-        control_panel, text='Pause', command=self.pause_video
+        self.control_panel, text='Pause', command=self.pause_video
     )
     self.btn_pause.pack(side=tk.LEFT, padx=5)
 
     self.btn_stop = tk.Button(
-        control_panel, text='Stop', command=self.stop_video
+        self.control_panel, text='Stop', command=self.stop_video
     )
     self.btn_stop.pack(side=tk.LEFT, padx=5)
 
+    # Dedicated Fullscreen toggle button
+    self.btn_fullscreen = tk.Button(
+        self.control_panel, text='Fullscreen', command=self.toggle_fullscreen
+    )
+    self.btn_fullscreen.pack(side=tk.RIGHT, padx=5)
+
     # Volume control
-    tk.Label(control_panel, text='Volume:').pack(side=tk.LEFT, padx=(15, 5))
+    tk.Label(self.control_panel, text='Volume:').pack(
+        side=tk.LEFT, padx=(15, 5)
+    )
     self.volume_var = tk.IntVar(value=80)
     self.volume_slider = ttk.Scale(
-        control_panel,
+        self.control_panel,
         from_=0,
         to=100,
         orient=tk.HORIZONTAL,
@@ -89,6 +101,9 @@ class VideoPlayerApp(tk.Tk):
     )
     self.volume_slider.pack(side=tk.LEFT, padx=5)
     self.media_player.audio_set_volume(80)
+
+    # Allow Escape key to exit fullscreen as a safety fallback
+    self.bind('<Escape>', self.exit_fullscreen)
 
     # Ensure window is drawn before attaching VLC video output
     self.update_idletasks()
@@ -106,6 +121,19 @@ class VideoPlayerApp(tk.Tk):
       self.media_player.set_nsobject(win_id)
     else:
       self.media_player.set_xwindow(win_id)
+
+  def toggle_fullscreen(self):
+    self.is_fullscreen = not self.is_fullscreen
+    self.attributes('-fullscreen', self.is_fullscreen)
+
+    if self.is_fullscreen:
+      self.btn_fullscreen.config(text='Exit Fullscreen')
+    else:
+      self.btn_fullscreen.config(text='Fullscreen')
+
+  def exit_fullscreen(self, event=None):
+    if self.is_fullscreen:
+      self.toggle_fullscreen()
 
   def open_file(self):
     file_path = filedialog.askopenfilename(

@@ -1,15 +1,15 @@
 # pip install python-vlc
-# download and install video player from : https://www.videolan.org/vlc/
-# video download: https://www.pexels.com/videos/
+# download and install video player from : https://videolan.org
+# video download: https://pexels.com
 import os
 import sys
+import tkinter as tk
+from tkinter import filedialog, ttk
 
 vlc_path = r'C:\Program Files\VideoLAN\VLC'
 if os.path.exists(vlc_path):
   os.add_dll_directory(vlc_path)
 
-import tkinter as tk
-from tkinter import filedialog, ttk
 import vlc
 
 
@@ -20,8 +20,9 @@ class VideoPlayerApp(tk.Tk):
     self.title('Python Media Player (AVI / MP4 / MKV)')
     self.geometry('800x600')
 
-    # Create VLC instance and player
-    self.instance = vlc.Instance()
+    # Disable hardware acceleration (--avcodec-hw=none) to fix Intel UHD D3D11VA buffer errors
+    # Add '--quiet' to suppress non-fatal Windows child-window thumbnail warnings
+    self.instance = vlc.Instance('--avcodec-hw=none', '--quiet')
     self.media_player = self.instance.media_player_new()
     self.is_dragging = False
 
@@ -75,32 +76,54 @@ class VideoPlayerApp(tk.Tk):
     )
     self.btn_stop.pack(side=tk.LEFT, padx=5)
 
-    # Start the periodic UI update loop
+    # Volume control
+    tk.Label(control_panel, text='Volume:').pack(side=tk.LEFT, padx=(15, 5))
+    self.volume_var = tk.IntVar(value=80)
+    self.volume_slider = ttk.Scale(
+        control_panel,
+        from_=0,
+        to=100,
+        orient=tk.HORIZONTAL,
+        variable=self.volume_var,
+        command=self.set_volume,
+    )
+    self.volume_slider.pack(side=tk.LEFT, padx=5)
+    self.media_player.audio_set_volume(80)
+
+    # Ensure window is drawn before attaching VLC video output
+    self.update_idletasks()
+    self._bind_video_window()
+
+    # Start periodic UI update loop for timeline
     self.update_timeline()
+
+  def _bind_video_window(self):
+    """Attach VLC video output to the Tkinter frame across platforms."""
+    win_id = self.video_frame.winfo_id()
+    if sys.platform.startswith('win'):
+      self.media_player.set_hwnd(win_id)
+    elif sys.platform == 'darwin':
+      self.media_player.set_nsobject(win_id)
+    else:
+      self.media_player.set_xwindow(win_id)
 
   def open_file(self):
     file_path = filedialog.askopenfilename(
-        filetypes=[
-            ('Video Files', '*.avi *.mp4 *.mkv *.mov *.webm'),
+        title='Select a Video File',
+        filetypes=(
+            ('Video Files', '*.mp4 *.avi *.mkv *.mov *.wmv'),
             ('All Files', '*.*'),
-        ]
+        ),
     )
     if file_path:
       media = self.instance.media_new(file_path)
       self.media_player.set_media(media)
-
-      # Embed video window to Tkinter frame based on OS
-      if sys.platform.startswith('linux'):
-        self.media_player.set_xwindow(self.video_frame.winfo_id())
-      elif sys.platform == 'win32':
-        self.media_player.set_hwnd(self.video_frame.winfo_id())
-      elif sys.platform == 'darwin':
-        self.media_player.set_nsobject(self.video_frame.winfo_id())
-
+      self._bind_video_window()
       self.play_video()
 
   def play_video(self):
-    self.media_player.play()
+    if self.media_player.get_media():
+      self.media_player.play()
 
   def pause_video(self):
     self.media_player.pause()
@@ -110,37 +133,33 @@ class VideoPlayerApp(tk.Tk):
     self.seek_var.set(0)
     self.time_label.config(text='00:00 / 00:00')
 
+  def set_volume(self, value):
+    self.media_player.audio_set_volume(int(float(value)))
+
   def on_slider_press(self, event):
     self.is_dragging = True
 
   def on_slider_release(self, event):
     self.is_dragging = False
-    self.set_video_position()
+    self.on_seek(self.seek_var.get())
 
   def on_seek(self, value):
-    # Update video position live while dragging
-    if self.is_dragging:
-      self.set_video_position()
-
-  def set_video_position(self):
-    length = self.media_player.get_length()
-    if length > 0:
-      pos = self.seek_var.get() / 1000.0
+    if self.is_dragging and self.media_player.get_length() > 0:
+      pos = float(value) / 1000.0
       self.media_player.set_position(pos)
 
   def format_time(self, milliseconds):
     if milliseconds < 0:
       return '00:00'
-    seconds = int(milliseconds / 1000)
-    mins, secs = divmod(seconds, 60)
-    hours, mins = divmod(mins, 60)
+    seconds = milliseconds // 1000
+    minutes, seconds = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
     if hours > 0:
-      return f'{hours:02d}:{mins:02d}:{secs:02d}'
-    return f'{mins:02d}:{secs:02d}'
+      return f'{hours:02d}:{minutes:02d}:{seconds:02d}'
+    return f'{minutes:02d}:{seconds:02d}'
 
   def update_timeline(self):
-    # Sync slider and timestamp with current playback every 250ms
-    if not self.is_dragging and self.media_player.is_playing():
+    if self.media_player.is_playing() and not self.is_dragging:
       length = self.media_player.get_length()
       current = self.media_player.get_time()
       if length > 0:
@@ -149,10 +168,14 @@ class VideoPlayerApp(tk.Tk):
         self.time_label.config(
             text=f'{self.format_time(current)} / {self.format_time(length)}'
         )
+    self.after(500, self.update_timeline)
 
-    self.after(250, self.update_timeline)
+  def on_closing(self):
+    self.media_player.stop()
+    self.destroy()
 
 
 if __name__ == '__main__':
   app = VideoPlayerApp()
+  app.protocol('WM_DELETE_WINDOW', app.on_closing)
   app.mainloop()

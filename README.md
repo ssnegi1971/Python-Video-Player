@@ -1,6 +1,6 @@
 Runs videos of type Python Media Player (AVI / MP4 / MKV)
 
-#steps to create EXE for one-click use of app place pythonTextEditor.py in a folder (example:C:\Users\Admin\Desktop\work\Python\PythonApps) along with txt_studio.ico. #Goto command prompt
+#steps to create EXE for one-click use of app place PythonVideoPlayer.py in a folder (example:C:\Users\Admin\Desktop\work\Python\PythonApps) along with txt_studio.ico. #Goto command prompt
 
 pip install pyinstaller
 
